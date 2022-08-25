@@ -1,0 +1,9 @@
+<launch>
+
+    <node pkg="velodyne_pkg" type="gpsimu_parser.py" name="gpsimu_parser" />
+    <node pkg="velodyne_pkg" type="global_path_pub.py" name="global_path_pub"  />
+    <node pkg="velodyne_pkg" type="local_path_pub.py" name="local_path_pub" />
+    <node pkg="velodyne_pkg" type="velodyne_cluster_2.py" name="velodyne_cluster_2" />
+    <node pkg="velodyne_pkg" type="practice.py" name="practice" output = "screen"/>
+
+</launch>
