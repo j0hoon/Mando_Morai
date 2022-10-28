@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import rospy
 from morai_msgs.msg import CtrlCmd,EventInfo,Lamps
@@ -46,37 +47,32 @@ class IMGParser:
         except CvBridgeError as e:
             print(e)
 
-        self.gray = cv2.cvtColor(self.img_bgr, cv2.COLOR_RGB2GRAY)
-        self.blur = cv2.GaussianBlur(self.gray, (3, 3), 0)
-        canny = cv2.Canny(self.blur, 70, 210)
+        self.gray = cv2.cvtColor(self.img_bgr, cv2.COLOR_RGB2GRAY)   # 이미지를 흑백으로 변경
+        self.blur = cv2.GaussianBlur(self.gray, (3, 3), 0)           #가우시안 필터 적용
+        canny = cv2.Canny(self.blur, 70, 210)                        #캐니 알고리즘 적용
 
-        self.mask = self.mask_roi(canny)
+        self.mask = self.mask_roi(canny)                             #ROI 설정
 
-        self.hough = cv2.HoughLinesP(self.mask, 1, 1 * pi/180, 30, np.array([]), 10, 20)
+        self.hough = cv2.HoughLinesP(self.mask, 1, 1 * pi/180, 30, np.array([]), 10, 20) # 허프 변환
         line_arr = np.squeeze(self.hough)
-        self.slope_degree = (np.arctan2(line_arr[:,1] - line_arr[:,3], line_arr[:,0] - line_arr[:,2]) * 180) / np.pi
+        self.slope_degree = (np.arctan2(line_arr[:,1] - line_arr[:,3], line_arr[:,0] - line_arr[:,2]) * 180) / np.pi  #허프 변환으로 인식한 차선들 기울기 구하기
 
-        line_arr = line_arr[np.abs(self.slope_degree)<160]
-        self.slope_degree = self.slope_degree[np.abs(self.slope_degree)<160]
+        line_arr = line_arr[np.abs(self.slope_degree)<160]                  
+        self.slope_degree = self.slope_degree[np.abs(self.slope_degree)<160]     #수평 기울기 제한하기 
 
         line_arr = line_arr[np.abs(self.slope_degree)>95]
-        self.slope_degree = self.slope_degree[np.abs(self.slope_degree)>95]
+        self.slope_degree = self.slope_degree[np.abs(self.slope_degree)>95]      #수직 기울기 제한
 
-        L_lines, R_lines = line_arr[(self.slope_degree>0),:], line_arr[(self.slope_degree<0),:]
+        L_lines, R_lines = line_arr[(self.slope_degree>0),:], line_arr[(self.slope_degree<0),:]  #제한하고 남은 진또배기 차선들이고 판단한 직선 모임
         temp = np.zeros((self.mask.shape[0], self.mask.shape[1], 3), dtype=np.uint8)
         L_lines, R_lines = L_lines[:,None], R_lines[:,None]
 
-        #new_L = np.array(L_lines).flatten
-        #new_r = np.array(R_lines).flatten
-
-        #print("L: ", new_L)
-        #print("R: ", new_r)
 
         L=0
         i=0
-        R=0
+        R=0 # 위에 변수 3개는 for문 오류 해결하려고 선언
 
-        if L_lines.size != 0:
+        if L_lines.size != 0:          
 
             for i in range(0,3):
 
@@ -92,7 +88,12 @@ class IMGParser:
 
                 R = R_lines[0,0,i]
                 R+=R
-                i+=1
+                i+=1                         
+
+# 우회전해야할 때, 오른쪽 차선은 인식을 못하는 경우이니 R_lines에는 요소가 담겨있지 않다. 
+#그래서 if문에 != 적용.....그래서 왼쪽 차선 정보가 담겨있는 L_lines의 첫 번째 차원, 첫번째 행의 요소 4개만 평균치를 내어 조향각으로 생각 
+# (차선이나 옆에 돌담이나 직선으로 검출시 비슷한 기울기를 가진다고 판단)
+
 
         rrr = 1
         lll = 1
@@ -101,11 +102,13 @@ class IMGParser:
         print("LL:",avg_L_degree)
         print("RR:",avg_R_degree)
 
+#평균내는 과정, lll과 rrr은 처음에 만든 파라미터라 없애도 된다.
+
         self.ctrl_cmd_msg.accel = 0.1
 
         self.ctrl_cmd_pub.publish(self.ctrl_cmd_msg)
 
-        p=0.008
+        p=0.008 #기울기값은 60도 이렇게 나오지만 조향각은 최대 1만 받을 수 있으니 비율을 맞춰주는 파라미터
 
         if avg_R_degree == -180:
             avg =  L/4*lll
@@ -113,6 +116,9 @@ class IMGParser:
             self.ctrl_cmd_msg.steering =  -p*avg
 
             print("turn right")
+
+#-180도인 경우는 오른쪽 차선이 하나도 인지를 못한 상황>>우화전이 필요한 경우이다.
+#  이떄 -180이란 숫자땜에 평균에 영향을 주어 잘못된 조향각을 가지는 걸 방지하기에 평균 계산에 넣지 않았다.
 
 
 
@@ -128,16 +134,9 @@ class IMGParser:
 
             self.ctrl_cmd_msg.steering = - p*avg 
 
+#0도인 경우는 왼쪽 차선이 하나도 인지를 못한 상황>>좌화전이 필요한 경우이다.
+#  이떄 0이란 숫자땜에 평균에 영향을 주어 잘못된 조향각을 가지는 걸 방지하기에 평균 계산에 넣지 않았다.
 
-
-
-
-
-        #self.line_img = np.zeros((self.mask.shape[0], self.mask.shape[1], 3), dtype=np.uint8)
-        #self.draw = self.draw_lines(self.line_img, self.hough)
-
-
-        #self.test = self.weighted_img(self.draw, self.img_bgr)
         
         cv2.imshow("Image window", self.mask)
         cv2.waitKey(1) 
@@ -171,9 +170,13 @@ class IMGParser:
             for x1,y1,x2,y2 in line:
                 cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
+
+
     def weighted_img(img, initial_img, p=1, b=1., r=0.): 
         return cv2.addWeighted(initial_img, p, img, b, r)
 
+#
+## 원본이미지와 허프 변환이 검출한 직선이랑 합치고 싶었지만 오류나서 냅둔 함수 2개
 
 
 
