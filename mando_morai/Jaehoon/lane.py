@@ -99,6 +99,7 @@ class IMGParser:
         lll = 1
         avg_L_degree = L/4*lll
         avg_R_degree = -180+R/4 * rrr
+        os.system('clear')
         print("LL:",avg_L_degree)
         print("RR:",avg_R_degree)
 
